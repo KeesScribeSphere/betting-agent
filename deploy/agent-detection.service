@@ -1,0 +1,19 @@
+[Unit]
+Description=Overtime Agent - Detection Monitor (Phase 2)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=agent
+Group=agent
+WorkingDirectory=/opt/agent
+EnvironmentFile=/etc/agent/env
+ExecStart=/opt/agent/.venv/bin/python -m agent.cli detect
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

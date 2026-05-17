@@ -1,0 +1,36 @@
+# Secrets and local ops
+.env
+wallet-setup.md
+*.pem
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+dist/
+build/
+*.egg-info/
+.eggs/
+uv.lock
+
+# Data and logs
+data/
+*.db
+*.db-journal
+/var/
+
+# Jupyter
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# IDE
+.idea/
+.vscode/
+.DS_Store
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/

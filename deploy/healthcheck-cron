@@ -1,0 +1,13 @@
+# Install: sudo cp deploy/healthcheck-cron /etc/cron.d/overtime-agent-health
+#          sudo chmod 644 /etc/cron.d/overtime-agent-health
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+0 */6 * * * agent source /etc/agent/env && /opt/agent/.venv/bin/python -c "
+import asyncio
+from agent.alerts import build_alerter
+from agent.config import load_env
+async def main():
+    a = build_alerter(load_env())
+    await a.send('agent alive (6h heartbeat)')
+asyncio.run(main())
+" >> /var/log/agent/healthcheck.log 2>&1
