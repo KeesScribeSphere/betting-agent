@@ -47,12 +47,24 @@ class QuoteSnapshot(Base):
     game_id: Mapped[str] = mapped_column(String(128), index=True)
     market_type: Mapped[str] = mapped_column(String(64), index=True)
     chain: Mapped[str] = mapped_column(String(32), index=True)
+    chain_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     side_index: Mapped[int] = mapped_column(Integer)
     side_label: Mapped[str] = mapped_column(String(128))
     implied_prob: Mapped[float] = mapped_column(Float)
+    decimal_odds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    odd_raw: Mapped[float | None] = mapped_column(Float, nullable=True)
     liquidity_usd: Mapped[float | None] = mapped_column(Float, nullable=True)
     sport: Mapped[str] = mapped_column(String(64))
+    sport_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     league: Mapped[str] = mapped_column(String(128))
+    type_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    player_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    kickoff_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    minutes_to_kickoff: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fixture_key: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    subgraph_market_id: Mapped[str | None] = mapped_column(String(256), nullable=True)
 
 
 class CrossChainGap(Base):
@@ -74,6 +86,37 @@ class CrossChainGap(Base):
     prob_b: Mapped[float] = mapped_column(Float)
     gap_pct: Mapped[float] = mapped_column(Float)
     net_gap_pct: Mapped[float] = mapped_column(Float)
+    sport_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    type_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fixture_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    kickoff_ts: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class TicketEvent(Base):
+    """Recent on-chain tickets sampled from the V2 subgraph (bet flow proxy)."""
+
+    __tablename__ = "ticket_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    sampled_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+    chain: Mapped[str] = mapped_column(String(32), index=True)
+    ticket_id: Mapped[str] = mapped_column(String(128), index=True)
+    tx_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    ticket_ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    buy_in_amount: Mapped[float | None] = mapped_column(Float, nullable=True)
+    payout: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fees: Mapped[float | None] = mapped_column(Float, nullable=True)
+    is_live: Mapped[bool] = mapped_column(Boolean, default=False)
+    collateral: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    game_id: Mapped[str] = mapped_column(String(128), index=True)
+    fixture_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    type_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    line: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    player_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    odd_raw: Mapped[float | None] = mapped_column(Float, nullable=True)
+    implied_prob: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 class PlacedBet(Base):

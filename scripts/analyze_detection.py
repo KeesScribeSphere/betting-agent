@@ -19,7 +19,8 @@ def main() -> None:
     engine = create_engine(f"sqlite:///{args.db}")
     gaps = pd.read_sql(
         text(
-            "SELECT date(ts) as day, net_gap_pct, gap_pct, sport, league, market_type, chain_a, chain_b "
+            "SELECT date(ts) as day, net_gap_pct, gap_pct, sport, sport_id, type_id, line, "
+            "fixture_key, league, market_type, chain_a, chain_b, kickoff_ts "
             "FROM cross_chain_gaps"
         ),
         engine,

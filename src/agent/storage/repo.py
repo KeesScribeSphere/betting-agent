@@ -9,6 +9,7 @@ from pathlib import Path
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from agent.storage.migrate import migrate_detection_schema
 from agent.storage.models import (
     Base,
     BridgeOperation,
@@ -17,6 +18,7 @@ from agent.storage.models import (
     KillSwitchEvent,
     PlacedBet,
     QuoteSnapshot,
+    TicketEvent,
 )
 
 
@@ -25,6 +27,7 @@ class Repository:
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._engine = create_engine(f"sqlite:///{db_path}", echo=False)
         Base.metadata.create_all(self._engine)
+        migrate_detection_schema(self._engine)
         self._session_factory = sessionmaker(bind=self._engine, expire_on_commit=False)
 
     def session(self) -> Session:
@@ -36,6 +39,26 @@ class Repository:
             session.add_all(items)
             session.commit()
             return len(items)
+
+    def add_ticket_events(self, events: Iterable[TicketEvent]) -> int:
+        items = list(events)
+        if not items:
+            return 0
+        keys = {(e.chain, e.ticket_id, e.game_id, e.position) for e in items}
+        with self.session() as session:
+            existing = session.execute(
+                select(TicketEvent.chain, TicketEvent.ticket_id, TicketEvent.game_id, TicketEvent.position).where(
+                    TicketEvent.chain.in_({k[0] for k in keys}),
+                    TicketEvent.ticket_id.in_({k[1] for k in keys}),
+                )
+            ).all()
+            existing_keys = set(existing)
+            new_items = [e for e in items if (e.chain, e.ticket_id, e.game_id, e.position) not in existing_keys]
+            if not new_items:
+                return 0
+            session.add_all(new_items)
+            session.commit()
+            return len(new_items)
 
     def add_gaps(self, gaps: Iterable[CrossChainGap]) -> int:
         with self.session() as session:

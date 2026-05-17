@@ -7,10 +7,11 @@ from datetime import UTC, datetime
 from itertools import combinations
 
 from agent.config import AppConfig, EnvSettings
+from agent.exchange.base import MarketQuote
 from agent.exchange.overtime.adapter import OvertimeAdapter
 from agent.logging_setup import get_logger
 from agent.mapper.game_mapper import GameMapper
-from agent.storage.models import CrossChainGap, QuoteSnapshot
+from agent.storage.models import CrossChainGap, QuoteSnapshot, TicketEvent
 from agent.storage.repo import Repository
 
 log = get_logger(__name__)
@@ -29,6 +30,7 @@ class DetectionMonitor:
         self.env = env
         self.repo = repo
         self.mapper = GameMapper()
+        self._poll_count = 0
         self.adapters: dict[str, OvertimeAdapter] = {
             name: OvertimeAdapter(
                 chain_config=chain_cfg,
@@ -43,7 +45,37 @@ class DetectionMonitor:
     async def close(self) -> None:
         await asyncio.gather(*(a.close() for a in self.adapters.values()))
 
+    def _snapshot_from_quote(self, ts: datetime, q: MarketQuote) -> QuoteSnapshot:
+        minutes_to_kickoff = None
+        if q.kickoff is not None:
+            minutes_to_kickoff = (q.kickoff - ts).total_seconds() / 60.0
+        return QuoteSnapshot(
+            ts=ts,
+            game_id=q.game_id,
+            market_type=q.market_type,
+            chain=q.chain,
+            chain_id=q.chain_id,
+            side_index=q.side_index,
+            side_label=q.side_label,
+            implied_prob=q.implied_prob,
+            decimal_odds=q.decimal_odds,
+            odd_raw=q.odd_raw,
+            liquidity_usd=q.liquidity_usd,
+            sport=q.sport,
+            sport_id=q.sport_id,
+            league=q.league,
+            type_id=q.market_type_id,
+            line=q.line,
+            player_id=q.player_id,
+            status=q.status,
+            kickoff_ts=q.kickoff,
+            minutes_to_kickoff=minutes_to_kickoff,
+            fixture_key=q.fixture_key,
+            subgraph_market_id=q.subgraph_market_id,
+        )
+
     async def poll_once(self) -> dict[str, int]:
+        self._poll_count += 1
         quotes_by_chain: dict[str, list] = {}
         tasks = {name: adapter.fetch_market_quotes() for name, adapter in self.adapters.items()}
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
@@ -56,24 +88,14 @@ class DetectionMonitor:
 
         ts = datetime.now(UTC)
         snapshots: list[QuoteSnapshot] = []
-        for chain, quotes in quotes_by_chain.items():
+        for quotes in quotes_by_chain.values():
             for q in quotes:
-                snapshots.append(
-                    QuoteSnapshot(
-                        ts=ts,
-                        game_id=q.game_id,
-                        market_type=q.market_type,
-                        chain=chain,
-                        side_index=q.side_index,
-                        side_label=q.side_label,
-                        implied_prob=q.implied_prob,
-                        liquidity_usd=q.liquidity_usd,
-                        sport=q.sport,
-                        league=q.league,
-                    )
-                )
+                snapshots.append(self._snapshot_from_quote(ts, q))
 
         snapshot_count = self.repo.add_quote_snapshots(snapshots) if snapshots else 0
+        ticket_count = 0
+        if self._should_sample_tickets():
+            ticket_count = await self._sample_tickets(ts)
         unified = self.mapper.group(quotes_by_chain)
         gaps = self._compute_gaps(ts, unified)
         gap_count = self.repo.add_gaps(gaps) if gaps else 0
@@ -86,8 +108,55 @@ class DetectionMonitor:
             snapshots=snapshot_count,
             gaps=gap_count,
             markets=len(unified),
+            ticket_events=ticket_count,
         )
-        return {"snapshots": snapshot_count, "gaps": gap_count, "markets": len(unified)}
+        return {
+            "snapshots": snapshot_count,
+            "gaps": gap_count,
+            "markets": len(unified),
+            "ticket_events": ticket_count,
+        }
+
+    def _should_sample_tickets(self) -> bool:
+        cfg = self.config.agent
+        if not cfg.ticket_sampling_enabled:
+            return False
+        every = max(1, cfg.ticket_sample_every_n_polls)
+        return self._poll_count % every == 0
+
+    async def _sample_tickets(self, sampled_ts: datetime) -> int:
+        limit = self.config.agent.ticket_sample_limit
+        events: list[TicketEvent] = []
+        tasks = {name: adapter.fetch_recent_tickets(limit=limit) for name, adapter in self.adapters.items()}
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+        for (name, _), result in zip(tasks.items(), results, strict=True):
+            if isinstance(result, Exception):
+                log.warning("ticket_sample_failed", chain=name, error=str(result))
+                continue
+            for leg in result:
+                events.append(
+                    TicketEvent(
+                        sampled_ts=sampled_ts,
+                        chain=leg["chain"],
+                        ticket_id=leg["ticket_id"],
+                        tx_hash=leg.get("tx_hash"),
+                        ticket_ts=leg["ticket_ts"],
+                        buy_in_amount=leg.get("buy_in_amount"),
+                        payout=leg.get("payout"),
+                        fees=leg.get("fees"),
+                        is_live=leg.get("is_live", False),
+                        collateral=leg.get("collateral"),
+                        game_id=leg["game_id"],
+                        fixture_key=leg.get("fixture_key"),
+                        type_id=leg.get("type_id"),
+                        line=leg.get("line"),
+                        player_id=leg.get("player_id"),
+                        position=leg.get("position"),
+                        odd_raw=leg.get("odd_raw"),
+                        implied_prob=leg.get("implied_prob"),
+                    )
+                )
+        return self.repo.add_ticket_events(events)
 
     def _compute_gaps(self, ts: datetime, unified: dict) -> list[CrossChainGap]:
         threshold = self.config.cost_floor.threshold_pct
@@ -122,6 +191,11 @@ class DetectionMonitor:
                             prob_b=qb.implied_prob,
                             gap_pct=gap_pct,
                             net_gap_pct=net_gap_pct,
+                            sport_id=qa.sport_id,
+                            type_id=qa.market_type_id,
+                            line=qa.line,
+                            fixture_key=qa.fixture_key,
+                            kickoff_ts=qa.kickoff,
                         )
                     )
                     if net_gap_pct >= threshold:

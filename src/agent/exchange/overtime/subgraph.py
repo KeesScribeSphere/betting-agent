@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from agent.exchange.base import MarketQuote
+from agent.exchange.overtime.game_id import decode_fixture_key, normalize_game_id
 from agent.exchange.overtime.rest import _side_label
 from agent.logging_setup import get_logger
 
@@ -40,6 +41,7 @@ query OpenMarkets($maturityGte: BigInt!, $skip: Int!) {
     orderBy: maturity
     orderDirection: asc
   ) {
+    id
     gameId
     sportId
     typeId
@@ -52,6 +54,32 @@ query OpenMarkets($maturityGte: BigInt!, $skip: Int!) {
   }
 }
 """
+
+TICKETS_QUERY = """
+query RecentTickets($first: Int!) {
+  tickets(first: $first, orderBy: timestamp, orderDirection: desc) {
+    id
+    txHash
+    timestamp
+    buyInAmount
+    payout
+    isLive
+    fees
+    collateral
+    markets {
+      gameId
+      typeId
+      line
+      position
+      odd
+      playerId
+    }
+  }
+}
+"""
+
+# USDC-style collateral amounts on L2 sports tickets (6 decimals)
+_COLLATERAL_SCALE = 1e6
 
 
 def _market_type_key(type_id: int, line: int) -> str:
@@ -67,9 +95,13 @@ def _odd_to_implied(odd_raw: str | int) -> float:
 
 def _decode_game_id(game_id_hex: str) -> str:
     """Normalize gameId to 0x-prefixed hex string for cross-chain matching."""
-    if game_id_hex.startswith("0x"):
-        return game_id_hex.lower()
-    return f"0x{game_id_hex.lower()}"
+    return normalize_game_id(game_id_hex)
+
+
+def _scaled_amount(raw: str | int | None) -> float | None:
+    if raw is None:
+        return None
+    return float(raw) / _COLLATERAL_SCALE
 
 
 class OvertimeSubgraphClient:
@@ -142,11 +174,15 @@ class OvertimeSubgraphClient:
             line = int(row["line"])
             market_type = _market_type_key(type_id, line)
             side_index = int(row["position"])
+            odd_raw = float(row["odd"])
             implied = _odd_to_implied(row["odd"])
             if implied <= 0 or implied >= 1:
                 continue
             kickoff = datetime.fromtimestamp(int(row["maturity"]), tz=UTC)
-            sport = f"sport_{row['sportId']}"
+            sport_id = int(row["sportId"])
+            sport = f"sport_{sport_id}"
+            player_id = int(row["playerId"])
+            status = int(row["status"])
 
             pseudo_market = {
                 "homeTeam": "home",
@@ -169,6 +205,13 @@ class OvertimeSubgraphClient:
                     league=f"type_{type_id}",
                     kickoff=kickoff,
                     market_address=None,
+                    sport_id=sport_id,
+                    line=line,
+                    player_id=player_id if player_id != 0 else None,
+                    status=status,
+                    odd_raw=odd_raw,
+                    fixture_key=decode_fixture_key(game_id),
+                    subgraph_market_id=str(row.get("id") or ""),
                     raw=row,
                 )
             )
@@ -180,3 +223,42 @@ class OvertimeSubgraphClient:
             quotes=len(quotes),
         )
         return quotes
+
+    async def fetch_recent_tickets(self, limit: int = 100) -> list[dict[str, Any]]:
+        """Return recent ticket rows with one dict per market leg."""
+        data = await self._graphql(TICKETS_QUERY, {"first": limit})
+        legs: list[dict[str, Any]] = []
+        for ticket in data.get("tickets") or []:
+            ticket_ts = datetime.fromtimestamp(int(ticket["timestamp"]), tz=UTC)
+            for market in ticket.get("markets") or []:
+                game_id = _decode_game_id(str(market["gameId"]))
+                odd_raw = float(market["odd"]) if market.get("odd") is not None else None
+                implied = _odd_to_implied(market["odd"]) if odd_raw else None
+                legs.append(
+                    {
+                        "chain": self.chain_name,
+                        "ticket_id": str(ticket["id"]),
+                        "tx_hash": ticket.get("txHash"),
+                        "ticket_ts": ticket_ts,
+                        "buy_in_amount": _scaled_amount(ticket.get("buyInAmount")),
+                        "payout": _scaled_amount(ticket.get("payout")),
+                        "fees": _scaled_amount(ticket.get("fees")),
+                        "is_live": bool(ticket.get("isLive")),
+                        "collateral": ticket.get("collateral"),
+                        "game_id": game_id,
+                        "fixture_key": decode_fixture_key(game_id),
+                        "type_id": int(market["typeId"]),
+                        "line": int(market["line"]),
+                        "player_id": int(market["playerId"]) or None,
+                        "position": int(market["position"]),
+                        "odd_raw": odd_raw,
+                        "implied_prob": implied,
+                    }
+                )
+        log.info(
+            "subgraph_tickets_fetched",
+            chain=self.chain_name,
+            tickets=len(data.get("tickets") or []),
+            legs=len(legs),
+        )
+        return legs

@@ -76,6 +76,14 @@ python scripts/analyze_detection.py --db data/agent.db
 
 Or use Jupyter: `notebooks/detection_analysis.ipynb`
 
+**SQLite logging (Phase 2):**
+
+- `quote_snapshots` — implied prob, decimal odds, `fixture_key`, kickoff, `type_id` / `line` / `sport_id`, subgraph market id
+- `cross_chain_gaps` — same fixture metadata on each gap row
+- `ticket_events` — recent on-chain tickets sampled from the subgraph (~every 60s by default)
+
+Existing `data/agent.db` files are migrated in place on startup (new columns + `ticket_events` table). Weekly backup: `scripts/backup_detection_db.sh`.
+
 ## VPS deployment
 
 See [deploy/README.md](deploy/README.md) for systemd units, logrotate, healthcheck cron, and emergency stop.

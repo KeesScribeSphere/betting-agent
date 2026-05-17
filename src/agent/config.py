@@ -17,6 +17,10 @@ class AgentConfig(BaseModel):
     kill_switch_path: str = "data/kill-switch.flag"
     log_path: str = "data/agent.jsonl"
     timezone: str = "Europe/Amsterdam"
+    # Sample recent subgraph tickets every N polls (~60s at 5s interval when N=12)
+    ticket_sampling_enabled: bool = True
+    ticket_sample_every_n_polls: int = 12
+    ticket_sample_limit: int = 100
 
 
 class CostFloorConfig(BaseModel):

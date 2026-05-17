@@ -26,6 +26,13 @@ class MarketQuote:
     league: str
     kickoff: datetime | None
     market_address: str | None
+    sport_id: int | None = None
+    line: int | None = None
+    player_id: int | None = None
+    status: int | None = None
+    odd_raw: float | None = None
+    fixture_key: str | None = None
+    subgraph_market_id: str | None = None
     raw: dict[str, Any] | None = None
 
 

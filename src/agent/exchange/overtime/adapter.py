@@ -126,6 +126,9 @@ class OvertimeAdapter(ExchangeAdapter):
             log.exception("trade_failed", chain=self.chain, error=str(exc))
             return TradeResult(success=False, tx_hash=None, chain=self.chain, error=str(exc))
 
+    async def fetch_recent_tickets(self, limit: int = 100) -> list[dict[str, Any]]:
+        return await self._subgraph.fetch_recent_tickets(limit=limit)
+
     async def fetch_open_positions(self) -> list[dict[str, Any]]:
         return []
 

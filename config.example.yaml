@@ -6,6 +6,10 @@ agent:
   kill_switch_path: data/kill-switch.flag
   log_path: data/agent.jsonl
   timezone: Europe/Amsterdam
+  # Rich logging: fixture_key, kickoff, odds metadata on every quote snapshot
+  ticket_sampling_enabled: true
+  ticket_sample_every_n_polls: 12   # ~60s at 5s polls
+  ticket_sample_limit: 100
 
 cost_floor:
   min_edge_pct: 6.0
