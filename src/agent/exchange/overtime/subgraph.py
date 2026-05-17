@@ -78,8 +78,34 @@ query RecentTickets($first: Int!) {
 }
 """
 
-# USDC-style collateral amounts on L2 sports tickets (6 decimals)
-_COLLATERAL_SCALE = 1e6
+# Collateral token decimals (addresses are lowercase checksummed-agnostic)
+_COLLATERAL_DECIMALS: dict[str, int] = {
+    "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913": 6,  # USDC (Base)
+    "0x0b2c639c5338137c4aa58b0cae1a9cfbe376e89fd": 6,  # USDC (Optimism)
+    "0xaf88d065e77c8cc2239327c5edb3a432268e5831": 6,  # USDC (Arbitrum)
+    "0x4200000000000000000000000000000000000006": 18,  # WETH (canonical L2)
+    "0x7750c092e284e2c7366f50c8306f43c7eb2e82a2": 18,  # THALES
+}
+
+
+def _collateral_decimals(collateral: str | None) -> int:
+    if not collateral:
+        return 6
+    return _COLLATERAL_DECIMALS.get(collateral.lower(), 18)
+
+
+def _scaled_amount(raw: str | int | None, collateral: str | None = None) -> float | None:
+    if raw is None:
+        return None
+    value = float(raw)
+    if value == 0:
+        return 0.0
+    decimals = _collateral_decimals(collateral)
+    human = value / (10**decimals)
+    # Legacy mis-scale guard: USDC-sized raw stored with 6 divisor on 18-dec token
+    if human > 1_000_000 and decimals == 6:
+        human = value / 1e18
+    return human
 
 
 def _market_type_key(type_id: int, line: int) -> str:
@@ -96,12 +122,6 @@ def _odd_to_implied(odd_raw: str | int) -> float:
 def _decode_game_id(game_id_hex: str) -> str:
     """Normalize gameId to 0x-prefixed hex string for cross-chain matching."""
     return normalize_game_id(game_id_hex)
-
-
-def _scaled_amount(raw: str | int | None) -> float | None:
-    if raw is None:
-        return None
-    return float(raw) / _COLLATERAL_SCALE
 
 
 class OvertimeSubgraphClient:
@@ -240,9 +260,9 @@ class OvertimeSubgraphClient:
                         "ticket_id": str(ticket["id"]),
                         "tx_hash": ticket.get("txHash"),
                         "ticket_ts": ticket_ts,
-                        "buy_in_amount": _scaled_amount(ticket.get("buyInAmount")),
-                        "payout": _scaled_amount(ticket.get("payout")),
-                        "fees": _scaled_amount(ticket.get("fees")),
+                        "buy_in_amount": _scaled_amount(ticket.get("buyInAmount"), ticket.get("collateral")),
+                        "payout": _scaled_amount(ticket.get("payout"), ticket.get("collateral")),
+                        "fees": _scaled_amount(ticket.get("fees"), ticket.get("collateral")),
                         "is_live": bool(ticket.get("isLive")),
                         "collateral": ticket.get("collateral"),
                         "game_id": game_id,
