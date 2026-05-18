@@ -152,36 +152,32 @@ class OnchainTradeClient:
             address=w3.to_checksum_address(self.sports_amm_address),
             abi=SPORTS_AMM_V2_QUOTE_ABI,
         )
-        on_chain_root = await amm.functions.rootPerGame(
-            bytes.fromhex(quote.game_id[2:])
-        ).call()
+        game_id_bytes = bytes.fromhex(quote.game_id[2:] if quote.game_id.startswith("0x") else quote.game_id)
+        on_chain_root = await amm.functions.rootPerGame(game_id_bytes).call()
+        if on_chain_root == b"\x00" * 32:
+            raise ValueError(
+                f"No on-chain merkle root for game {quote.game_id} — "
+                "tree not published yet; try another market or use REST markets API"
+            )
         if on_chain_root != root:
             log.warning(
                 "merkle_root_mismatch",
                 computed=root.hex(),
                 on_chain=on_chain_root.hex(),
                 game_id=quote.game_id,
+                leaf_count=len(leaves_in),
             )
 
-        target_key = (
-            quote.game_id,
-            quote.sport_id or 0,
-            quote.market_type_id,
-            int(quote.raw.get("maturity", 0)) if quote.raw else 0,
-            quote.status or 0,
-            quote.line or 0,
-            quote.player_id or 0,
-        )
+        maturity = int(quote.raw.get("maturity", 0)) if quote.raw else 0
         target_leaf = None
         for leaf in leaves_in:
             if (
-                leaf.game_id == target_key[0]
-                and leaf.sport_id == target_key[1]
-                and leaf.type_id == target_key[2]
-                and leaf.maturity == target_key[3]
-                and leaf.status == target_key[4]
-                and leaf.line == target_key[5]
-                and leaf.player_id == target_key[6]
+                leaf.game_id == quote.game_id
+                and leaf.type_id == quote.market_type_id
+                and leaf.maturity == maturity
+                and leaf.line == (quote.line or 0)
+                and leaf.player_id == (quote.player_id or 0)
+                and leaf.sport_id == (quote.sport_id or 0)
             ):
                 target_leaf = leaf
                 break
@@ -190,6 +186,8 @@ class OnchainTradeClient:
 
         pos = quote.side_index if position is None else position
         leaf_hash = compute_merkle_leaf(target_leaf)
+        if leaf_hash not in leaf_hashes:
+            raise ValueError("Target leaf hash missing from game tree (encoding mismatch)")
         proof = proofs.get(leaf_hash)
         if not proof:
             raise ValueError("Merkle proof not found for target leaf")

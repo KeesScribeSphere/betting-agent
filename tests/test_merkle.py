@@ -1,4 +1,9 @@
-from agent.exchange.overtime.merkle import MarketLeafInput, aggregate_subgraph_rows, compute_merkle_leaf
+from agent.exchange.overtime.merkle import (
+    MarketLeafInput,
+    aggregate_subgraph_rows,
+    build_sorted_merkle_tree,
+    compute_merkle_leaf,
+)
 
 
 def test_aggregate_subgraph_rows_builds_odds_array():
@@ -29,4 +34,6 @@ def test_aggregate_subgraph_rows_builds_odds_array():
     leaves = aggregate_subgraph_rows(rows)
     assert len(leaves) == 1
     assert len(leaves[0].odds) == 2
-    assert compute_merkle_leaf(leaves[0])  # does not raise
+    leaf_hash = compute_merkle_leaf(leaves[0])
+    _root, proofs = build_sorted_merkle_tree([leaf_hash])
+    assert proofs[leaf_hash] == []

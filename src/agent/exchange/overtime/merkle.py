@@ -71,20 +71,15 @@ def build_sorted_merkle_tree(leaves: list[bytes]) -> tuple[bytes, dict[bytes, li
     root = layers[-1][0]
 
     proofs: dict[bytes, list[bytes]] = {}
-
-    def walk(layer_idx: int, idx: int, path: list[bytes]) -> None:
-        if layer_idx == 0:
-            proofs[layers[0][idx]] = path.copy()
-            return
-        layer = layers[layer_idx]
-        sibling_idx = idx + 1 if idx % 2 == 0 else idx - 1
-        if sibling_idx < len(layer):
-            path.append(layer[sibling_idx])
-        parent_idx = idx // 2
-        walk(layer_idx - 1, parent_idx, path)
-
     for i, leaf in enumerate(layers[0]):
-        walk(len(layers) - 1, i, [])
+        path: list[bytes] = []
+        idx = i
+        for layer in layers[:-1]:
+            sibling_idx = idx + 1 if idx % 2 == 0 else idx - 1
+            if sibling_idx < len(layer):
+                path.append(layer[sibling_idx])
+            idx //= 2
+        proofs[leaf] = path
 
     return root, proofs
 

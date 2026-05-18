@@ -90,22 +90,58 @@ async def _dry_run_quote(config, env, chain_name: str, stake: float) -> None:
         simulate_trades=True,
     )
     try:
+        from agent.exchange.overtime.onchain_trade import SPORTS_AMM_V2_QUOTE_ABI, OnchainTradeClient
+
         quotes = await adapter.fetch_market_quotes()
         if not quotes:
             raise SystemExit("No open quotes")
-        q = quotes[0]
-        req = TradeRequest(
-            game_id=q.game_id,
-            market_type=q.market_type,
-            side_index=q.side_index,
-            stake_usdc=stake,
-            type_id=q.market_type_id,
-            line=q.line or 0,
-            player_id=q.player_id or 0,
-            sport_id=q.sport_id or 0,
+
+        onchain = OnchainTradeClient(
+            rpc_urls=chain.rpc_urls,
+            chain_id=chain.chain_id,
+            sports_amm_address=chain.sports_amm_v2,
+            usdc_address=chain.usdc,
         )
-        quote = await adapter.get_quote(req)
-        log.info("dry_run_quote_ok", chain=chain_name, quote=quote)
+        w3 = await onchain._web3()  # noqa: SLF001
+        amm = w3.eth.contract(
+            address=w3.to_checksum_address(chain.sports_amm_v2),
+            abi=SPORTS_AMM_V2_QUOTE_ABI,
+        )
+
+        last_error: Exception | None = None
+        for q in quotes[:40]:
+            gid = bytes.fromhex(q.game_id[2:])
+            root = await amm.functions.rootPerGame(gid).call()
+            if root == b"\x00" * 32:
+                continue
+            req = TradeRequest(
+                game_id=q.game_id,
+                market_type=q.market_type,
+                side_index=q.side_index,
+                stake_usdc=stake,
+                type_id=q.market_type_id,
+                line=q.line or 0,
+                player_id=q.player_id or 0,
+                sport_id=q.sport_id or 0,
+            )
+            try:
+                quote = await adapter.get_quote(req)
+                log.info(
+                    "dry_run_quote_ok",
+                    chain=chain_name,
+                    game_id=q.game_id,
+                    market_type=q.market_type,
+                    quote=quote,
+                )
+                return
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                log.warning("dry_run_quote_try_failed", market_type=q.market_type, error=str(exc))
+
+        raise SystemExit(
+            f"No market passed on-chain dry-run (checked {min(40, len(quotes))} quotes). "
+            f"Last error: {last_error}"
+        )
     finally:
         await adapter.close()
 
