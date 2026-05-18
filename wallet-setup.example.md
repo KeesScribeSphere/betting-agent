@@ -17,7 +17,7 @@
 ## USDC (native)
 
 - Base: `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`
-- Optimism: `0x0b2C639c5338137C4aa58B0cAe1a9CfBe376e89Fd`
+- Optimism: `0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85`
 - Arbitrum: `0xaf88d065e77c8cC2239327C5EDb3A432268e5831`
 
 ## Sports AMM V2 (verify at https://contracts.overtime.io/)

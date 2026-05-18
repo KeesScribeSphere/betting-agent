@@ -32,7 +32,7 @@ def compute_merkle_leaf(input_data: MarketLeafInput) -> bytes:
     """Match contracts-v2 SportsAMMV2RiskManager._computeMerkleLeaf (abi.encodePacked)."""
     game_id = bytes.fromhex(normalize_game_id(input_data.game_id)[2:])
     packed = encode_packed(
-        ["bytes32", "uint16", "uint16", "uint256", "uint8", "int256", "uint256", "uint256[]"],
+        ["bytes32", "uint16", "uint16", "uint256", "uint8", "int24", "uint256", "uint256[]"],
         [
             game_id,
             input_data.sport_id,

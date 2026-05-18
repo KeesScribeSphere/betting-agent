@@ -8,6 +8,8 @@ from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
+
+from agent.util.addresses import checksum_address
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -74,7 +76,7 @@ class ChainConfig(BaseModel):
     @field_validator("sports_amm_v2", "usdc")
     @classmethod
     def _checksum_address(cls, v: str) -> str:
-        return v if v.startswith("0x") else f"0x{v}"
+        return checksum_address(v)
 
 
 class AppConfig(BaseModel):

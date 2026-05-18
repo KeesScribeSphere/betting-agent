@@ -17,6 +17,7 @@ from agent.exchange.overtime.merkle import (
 )
 from agent.exchange.overtime.rpc_util import with_rpc_retry
 from agent.logging_setup import get_logger
+from agent.util.addresses import checksum_address
 
 log = get_logger(__name__)
 
@@ -124,7 +125,7 @@ class OnchainTradeClient:
         self.chain_id = chain_id
         self.rpc_urls = rpc_urls
         self.sports_amm_address = sports_amm_address
-        self.usdc_address = usdc_address
+        self.usdc_address = checksum_address(usdc_address)
         self._w3: AsyncWeb3 | None = None
 
     async def _web3(self) -> AsyncWeb3:
@@ -210,7 +211,7 @@ class OnchainTradeClient:
             abi=SPORTS_AMM_V2_QUOTE_ABI,
         )
         buy_in_wei = int(buy_in_usdc * 10**6)
-        collateral = w3.to_checksum_address(collateral_address or self.usdc_address)
+        collateral = checksum_address(collateral_address or self.usdc_address)
         trade_tuple = _to_contract_trade_tuple(trade_data)
         result = await with_rpc_retry(
             lambda: amm.functions.tradeQuote([trade_tuple], buy_in_wei, collateral, is_live).call()

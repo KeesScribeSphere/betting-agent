@@ -21,7 +21,7 @@ def sample_config() -> AppConfig:
                 name="optimism",
                 rpc_urls=["https://mainnet.optimism.io"],
                 sports_amm_v2="0xFb4e4811C7A811E098A556bD79B64c20b479E431",
-                usdc="0x0b2C639c5338137C4aa58B0cAe1a9CfBe376e89Fd",
+                usdc="0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
             ),
         },
     )

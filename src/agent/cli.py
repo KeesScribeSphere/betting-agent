@@ -150,7 +150,7 @@ async def _dry_run_quote(config, env, chain_name: str, stake: float) -> None:
                 sport_id=q.sport_id or 0,
             )
             try:
-                quote = await adapter.get_quote(req)
+                quote = await adapter.get_quote(req, quote=q)
                 log.info(
                     "dry_run_quote_ok",
                     chain=chain_name,

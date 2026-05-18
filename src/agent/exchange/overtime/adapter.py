@@ -98,7 +98,11 @@ class OvertimeAdapter(ExchangeAdapter):
                 return q
         raise ValueError(f"No subgraph quote for {request.game_id} {request.market_type} side {request.side_index}")
 
-    async def get_quote(self, request: TradeRequest) -> dict[str, Any]:
+    async def get_quote(
+        self,
+        request: TradeRequest,
+        quote: MarketQuote | None = None,
+    ) -> dict[str, Any]:
         if self._use_rest_execution():
             body = {
                 "trades": [
@@ -118,7 +122,8 @@ class OvertimeAdapter(ExchangeAdapter):
             }
             return await self._rest.fetch_quotes(request.game_id, body)
 
-        quote = await self._market_quote_for_request(request)
+        if quote is None:
+            quote = await self._market_quote_for_request(request)
         rows = await self._subgraph.fetch_game_market_rows(request.game_id)
         trade_data = await self._onchain.build_trade_data(quote, rows, request.side_index)
         onchain_quote = await self._onchain.trade_quote(trade_data, request.stake_usdc)
@@ -181,7 +186,9 @@ class OvertimeAdapter(ExchangeAdapter):
         buy_in_wei = quote.get("buyInWei") or int(request.stake_usdc * 10**6)
         expected = quote["totalQuote"]
         slippage_wei = int(expected * request.slippage_pct / 100)
-        collateral = quote.get("collateral") or w3.to_checksum_address(self._chain_config.usdc)
+        from agent.util.addresses import checksum_address
+
+        collateral = quote.get("collateral") or checksum_address(self._chain_config.usdc)
         trade_tuple = _to_contract_trade_tuple(trade_data)
         await self._contracts.ensure_usdc_allowance(buy_in_wei)
         tx = await amm.functions.trade(
