@@ -52,6 +52,13 @@ class OvertimeApiConfig(BaseModel):
     data_source: str = "subgraph"
 
 
+class ExecutionConfig(BaseModel):
+    # rest: Overtime API only. onchain: merkle + tradeQuote/trade. auto: REST if key else onchain.
+    mode: str = "auto"
+    # eth_call tradeQuote before any tx (paper + live)
+    dry_run_quote_onchain: bool = True
+
+
 class AcrossConfig(BaseModel):
     api_url: str = "https://app.across.to/api"
 
@@ -75,6 +82,7 @@ class AppConfig(BaseModel):
     cost_floor: CostFloorConfig = Field(default_factory=CostFloorConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
     overtime_api: OvertimeApiConfig = Field(default_factory=OvertimeApiConfig)
+    execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     across: AcrossConfig = Field(default_factory=AcrossConfig)
     chains: dict[str, ChainConfig] = Field(default_factory=dict)
 

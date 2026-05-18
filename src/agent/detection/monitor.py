@@ -32,9 +32,10 @@ class DetectionMonitor:
         self.mapper = GameMapper()
         self._poll_count = 0
         self.adapters: dict[str, OvertimeAdapter] = {
-            name: OvertimeAdapter(
+            name:             OvertimeAdapter(
                 chain_config=chain_cfg,
                 api_config=config.overtime_api,
+                execution_config=config.execution,
                 api_key=env.overtime_api_key,
                 graph_api_key=env.thegraph_api_key,
                 simulate_trades=True,

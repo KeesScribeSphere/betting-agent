@@ -65,6 +65,30 @@ Set `overtime_api.data_source: subgraph` in `config.yaml` (default).
 
 Verify contract addresses at [contracts.overtime.io](https://contracts.overtime.io/).
 
+## Phase 3 — Automated dry-run → live (no manual bets)
+
+Execution does **not** require manual UI bets. Flow:
+
+1. **Paper (`python -m agent.cli paper`)** — finds hedged cross-chain signals (opposite sides, combined implied &lt; 1), runs **`tradeQuote` on-chain** via `eth_call` (dry-run), logs simulated legs to SQLite. No wallet tx.
+2. **Live (`AGENT_LIVE=1 python -m agent.cli live`)** — same loop; sends `trade()` on both legs when risk checks pass.
+
+**Without `OVERTIME_API_KEY`:** `execution.mode: auto` (default) uses **on-chain path**:
+
+- Load all open markets for a `gameId` from the subgraph  
+- Build merkle proofs (Thales `SportsAMMV2` leaf format)  
+- `eth_call` `tradeQuote` → validate liquidity/risk  
+- `trade()` with USDC when live  
+
+**With API key:** REST quote/markets used when available (`execution.mode: rest` or `auto`).
+
+Validate one chain:
+
+```bash
+python -m agent.cli dry-run-quote --chain base --stake 5
+```
+
+If `merkle_root_mismatch` appears in logs, the subgraph game tree may not match on-chain roots (nested parent/child markets) — apply for REST or we extend tree building.
+
 ## Phase 2 (detection run)
 
 ```bash

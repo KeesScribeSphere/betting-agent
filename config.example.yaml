@@ -28,6 +28,11 @@ risk:
   max_bridges_per_day: 3
   max_orders_per_chain_per_minute: 10
 
+execution:
+  # auto: use OVERTIME_API_KEY + REST if set, else on-chain tradeQuote/trade (merkle from subgraph)
+  mode: auto
+  dry_run_quote_onchain: true
+
 overtime_api:
   base_url: https://api.overtime.io
   # data_source: subgraph (default) | rest | auto

@@ -44,6 +44,11 @@ class TradeRequest:
     stake_usdc: float
     slippage_pct: float = 2.0
     collateral: str = "USDC"
+    type_id: int = 0
+    line: int = 0
+    player_id: int = 0
+    sport_id: int = 0
+    chain: str | None = None
 
 
 @dataclass(frozen=True)

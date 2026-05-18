@@ -30,6 +30,10 @@ def main(argv: list[str] | None = None) -> None:
     smoke = sub.add_parser("smoke", help="Connectivity smoke test (API + RPC)")
     smoke.add_argument("--chain", default="base")
 
+    dry = sub.add_parser("dry-run-quote", help="On-chain tradeQuote dry-run for one open market")
+    dry.add_argument("--chain", default="base")
+    dry.add_argument("--stake", type=float, default=5.0)
+
     args = parser.parse_args(argv)
     config = load_config()
     env = load_env()
@@ -50,6 +54,8 @@ def main(argv: list[str] | None = None) -> None:
         backtest_main()
     elif args.command == "smoke":
         asyncio.run(_smoke_test(config, env, args.chain))
+    elif args.command == "dry-run-quote":
+        asyncio.run(_dry_run_quote(config, env, args.chain, args.stake))
     else:
         parser.print_help()
         sys.exit(1)
@@ -67,6 +73,43 @@ async def _detect_once(config, env) -> None:
         await monitor.close()
 
 
+async def _dry_run_quote(config, env, chain_name: str, stake: float) -> None:
+    from agent.exchange.base import TradeRequest
+    from agent.exchange.overtime.adapter import OvertimeAdapter
+
+    chain = config.chains.get(chain_name)
+    if not chain:
+        raise SystemExit(f"Unknown chain: {chain_name}")
+
+    adapter = OvertimeAdapter(
+        chain_config=chain,
+        api_config=config.overtime_api,
+        execution_config=config.execution.model_copy(update={"mode": "onchain"}),
+        api_key=env.overtime_api_key,
+        graph_api_key=env.thegraph_api_key,
+        simulate_trades=True,
+    )
+    try:
+        quotes = await adapter.fetch_market_quotes()
+        if not quotes:
+            raise SystemExit("No open quotes")
+        q = quotes[0]
+        req = TradeRequest(
+            game_id=q.game_id,
+            market_type=q.market_type,
+            side_index=q.side_index,
+            stake_usdc=stake,
+            type_id=q.market_type_id,
+            line=q.line or 0,
+            player_id=q.player_id or 0,
+            sport_id=q.sport_id or 0,
+        )
+        quote = await adapter.get_quote(req)
+        log.info("dry_run_quote_ok", chain=chain_name, quote=quote)
+    finally:
+        await adapter.close()
+
+
 async def _smoke_test(config, env, chain_name: str) -> None:
     from agent.exchange.overtime.adapter import OvertimeAdapter
     from agent.wallet import WalletService
@@ -78,6 +121,7 @@ async def _smoke_test(config, env, chain_name: str) -> None:
     adapter = OvertimeAdapter(
         chain_config=chain,
         api_config=config.overtime_api,
+        execution_config=config.execution,
         api_key=env.overtime_api_key,
         graph_api_key=env.thegraph_api_key,
         simulate_trades=True,

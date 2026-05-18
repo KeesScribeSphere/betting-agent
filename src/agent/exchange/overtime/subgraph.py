@@ -32,6 +32,22 @@ SUBGRAPH_V2_DEPLOYMENT_BY_CHAIN_ID: dict[int, str] = {
 # Default Graph API key from thales-data (public in Overtime open-source frontend tooling)
 DEFAULT_GRAPH_API_KEY = "d19a6a80c2d5a004e62041171d5f4c64"
 
+GAME_MARKETS_QUERY = """
+query GameMarkets($gameId: String!) {
+  markets(where: { gameId: $gameId, status: 0 }) {
+    gameId
+    sportId
+    typeId
+    line
+    maturity
+    status
+    position
+    odd
+    playerId
+  }
+}
+"""
+
 MARKETS_QUERY = """
 query OpenMarkets($maturityGte: BigInt!, $skip: Int!) {
   markets(
@@ -168,6 +184,10 @@ class OvertimeSubgraphClient:
         if body.get("errors"):
             raise RuntimeError(f"Subgraph errors: {body['errors']}")
         return body.get("data") or {}
+
+    async def fetch_game_market_rows(self, game_id: str) -> list[dict[str, Any]]:
+        data = await self._graphql(GAME_MARKETS_QUERY, {"gameId": game_id})
+        return list(data.get("markets") or [])
 
     async def fetch_open_market_rows(self) -> list[dict[str, Any]]:
         """Paginate all open V2 market sides (status=0, maturity >= now)."""

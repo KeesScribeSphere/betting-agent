@@ -41,6 +41,7 @@ class LiveRunner:
             name: OvertimeAdapter(
                 chain_config=chain_cfg,
                 api_config=config.overtime_api,
+                execution_config=config.execution,
                 api_key=env.overtime_api_key,
                 graph_api_key=env.thegraph_api_key,
                 private_key=env.agent_private_key if env.agent_live else None,
@@ -95,15 +96,15 @@ class LiveRunner:
                     total_usdc = sum(b["usdc"] for b in balances.values())
 
                     for signal in signals[:3]:
-                        chain_bal = balances.get(signal.chain_skewed, {"usdc": 0, "eth": 0})
+                        chain_bal = balances.get(signal.leg1_chain, {"usdc": 0, "eth": 0})
                         liq = None
                         market = unified.get((signal.game_id, signal.market_type))
                         if market:
-                            st = market.chains[signal.chain_skewed].quotes_by_side.get(signal.side_index)
+                            st = market.chains[signal.leg1_chain].quotes_by_side.get(signal.leg1_side)
                             liq = st.liquidity_usd if st else None
 
                         decision = self.risk.check_trade(
-                            chain=signal.chain_skewed,
+                            chain=signal.leg1_chain,
                             stake_usdc=signal.stake_usdc,
                             game_id=signal.game_id,
                             liquidity_usd=liq,
