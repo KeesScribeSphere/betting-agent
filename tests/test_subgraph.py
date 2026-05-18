@@ -15,6 +15,10 @@ def test_market_type_key_includes_line():
     assert _market_type_key(0, 0) == "type_0"
 
 
+def test_market_type_key_includes_player():
+    assert _market_type_key(11038, 250, 100031) == "type_11038_line_250_player_100031"
+
+
 def test_decode_game_id():
     assert _decode_game_id("0xABC").startswith("0x")
 

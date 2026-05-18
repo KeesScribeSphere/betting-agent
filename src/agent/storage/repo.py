@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from datetime import UTC, date, datetime
 from pathlib import Path
 
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, event, func, select, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from agent.storage.migrate import migrate_detection_schema
@@ -26,6 +26,19 @@ class Repository:
     def __init__(self, db_path: str) -> None:
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)
         self._engine = create_engine(f"sqlite:///{db_path}", echo=False)
+
+        @event.listens_for(self._engine, "connect")
+        def _set_sqlite_pragmas(dbapi_connection, _connection_record) -> None:
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+            cursor.close()
+
+        with self._engine.connect() as conn:
+            conn.execute(text("PRAGMA journal_mode=WAL"))
+            conn.execute(text("PRAGMA busy_timeout=30000"))
+            conn.commit()
+
         Base.metadata.create_all(self._engine)
         migrate_detection_schema(self._engine)
         self._session_factory = sessionmaker(bind=self._engine, expire_on_commit=False)

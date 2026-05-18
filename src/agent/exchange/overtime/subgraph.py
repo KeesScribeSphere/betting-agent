@@ -108,10 +108,15 @@ def _scaled_amount(raw: str | int | None, collateral: str | None = None) -> floa
     return human
 
 
-def _market_type_key(type_id: int, line: int) -> str:
+def _market_type_key(type_id: int, line: int, player_id: int = 0) -> str:
+    """Unique market key for cross-chain grouping (includes player props)."""
     if line == 0:
-        return f"type_{type_id}"
-    return f"type_{type_id}_line_{line}"
+        key = f"type_{type_id}"
+    else:
+        key = f"type_{type_id}_line_{line}"
+    if player_id != 0:
+        key = f"{key}_player_{player_id}"
+    return key
 
 
 def _odd_to_implied(odd_raw: str | int) -> float:
@@ -192,7 +197,8 @@ class OvertimeSubgraphClient:
             game_id = _decode_game_id(str(row["gameId"]))
             type_id = int(row["typeId"])
             line = int(row["line"])
-            market_type = _market_type_key(type_id, line)
+            player_id = int(row["playerId"])
+            market_type = _market_type_key(type_id, line, player_id)
             side_index = int(row["position"])
             odd_raw = float(row["odd"])
             implied = _odd_to_implied(row["odd"])
@@ -201,7 +207,6 @@ class OvertimeSubgraphClient:
             kickoff = datetime.fromtimestamp(int(row["maturity"]), tz=UTC)
             sport_id = int(row["sportId"])
             sport = f"sport_{sport_id}"
-            player_id = int(row["playerId"])
             status = int(row["status"])
 
             pseudo_market = {
