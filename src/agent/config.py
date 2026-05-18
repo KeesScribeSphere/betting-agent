@@ -131,8 +131,24 @@ def load_config(path: str | Path | None = None) -> AppConfig:
 
     chains_raw = raw.get("chains", {})
     chains = {name: ChainConfig(**cfg) for name, cfg in chains_raw.items()}
+    _prepend_env_rpc_urls(chains)
     raw["chains"] = chains
     return AppConfig(**raw)
+
+
+def _prepend_env_rpc_urls(chains: dict[str, ChainConfig]) -> None:
+    """Prefer private RPC URLs from env (avoids 429 on public endpoints)."""
+    env_map = {
+        "base": os.environ.get("BASE_RPC_URL"),
+        "optimism": os.environ.get("OPTIMISM_RPC_URL"),
+        "arbitrum": os.environ.get("ARBITRUM_RPC_URL"),
+    }
+    for name, url in env_map.items():
+        if not url or name not in chains:
+            continue
+        chain = chains[name]
+        rest = [u for u in chain.rpc_urls if u != url]
+        chain.rpc_urls = [url, *rest]
 
 
 def load_env() -> EnvSettings:

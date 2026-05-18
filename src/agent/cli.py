@@ -108,10 +108,35 @@ async def _dry_run_quote(config, env, chain_name: str, stake: float) -> None:
             abi=SPORTS_AMM_V2_QUOTE_ABI,
         )
 
+        import asyncio
+
+        from agent.exchange.overtime.rpc_util import with_rpc_retry
+
+        # One rootPerGame call per unique game (not per quote side).
+        seen_games: set[str] = set()
+        candidates = []
+        for q in quotes:
+            if q.game_id in seen_games:
+                continue
+            seen_games.add(q.game_id)
+            candidates.append(q)
+            if len(candidates) >= 20:
+                break
+
         last_error: Exception | None = None
-        for q in quotes[:40]:
+        checked = 0
+        for q in candidates:
             gid = bytes.fromhex(q.game_id[2:])
-            root = await amm.functions.rootPerGame(gid).call()
+            try:
+                root = await with_rpc_retry(lambda: amm.functions.rootPerGame(gid).call())
+            except Exception as exc:  # noqa: BLE001
+                last_error = exc
+                log.warning("root_per_game_rpc_failed", game_id=q.game_id, error=str(exc))
+                await asyncio.sleep(0.5)
+                continue
+            checked += 1
+            if checked > 1:
+                await asyncio.sleep(0.25)
             if root == b"\x00" * 32:
                 continue
             req = TradeRequest(
@@ -139,8 +164,9 @@ async def _dry_run_quote(config, env, chain_name: str, stake: float) -> None:
                 log.warning("dry_run_quote_try_failed", market_type=q.market_type, error=str(exc))
 
         raise SystemExit(
-            f"No market passed on-chain dry-run (checked {min(40, len(quotes))} quotes). "
-            f"Last error: {last_error}"
+            f"No market passed on-chain dry-run "
+            f"(checked {checked} unique games from {len(quotes)} quotes). "
+            f"Add a private Base RPC in config.yaml to avoid 429s. Last error: {last_error}"
         )
     finally:
         await adapter.close()

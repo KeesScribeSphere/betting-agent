@@ -48,8 +48,10 @@ chains:
   base:
     chain_id: 8453
     name: base
+    # Use a private RPC first (Alchemy/Infura/drpc) — public mainnet.base.org rate-limits dry-run scans.
     rpc_urls:
       - https://mainnet.base.org
+      - https://base.llamarpc.com
     sports_amm_v2: "0xa1ead27ebbd90b8ef385f264cc66ba4c96767fdf"
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
     native_symbol: ETH

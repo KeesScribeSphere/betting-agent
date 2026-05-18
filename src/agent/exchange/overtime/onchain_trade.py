@@ -15,6 +15,7 @@ from agent.exchange.overtime.merkle import (
     compute_merkle_leaf,
     trade_data_for_position,
 )
+from agent.exchange.overtime.rpc_util import with_rpc_retry
 from agent.logging_setup import get_logger
 
 log = get_logger(__name__)
@@ -153,7 +154,9 @@ class OnchainTradeClient:
             abi=SPORTS_AMM_V2_QUOTE_ABI,
         )
         game_id_bytes = bytes.fromhex(quote.game_id[2:] if quote.game_id.startswith("0x") else quote.game_id)
-        on_chain_root = await amm.functions.rootPerGame(game_id_bytes).call()
+        on_chain_root = await with_rpc_retry(
+            lambda: amm.functions.rootPerGame(game_id_bytes).call()
+        )
         if on_chain_root == b"\x00" * 32:
             raise ValueError(
                 f"No on-chain merkle root for game {quote.game_id} — "
@@ -209,7 +212,9 @@ class OnchainTradeClient:
         buy_in_wei = int(buy_in_usdc * 10**6)
         collateral = w3.to_checksum_address(collateral_address or self.usdc_address)
         trade_tuple = _to_contract_trade_tuple(trade_data)
-        result = await amm.functions.tradeQuote([trade_tuple], buy_in_wei, collateral, is_live).call()
+        result = await with_rpc_retry(
+            lambda: amm.functions.tradeQuote([trade_tuple], buy_in_wei, collateral, is_live).call()
+        )
         return {
             "totalQuote": result[0],
             "payout": result[1],
